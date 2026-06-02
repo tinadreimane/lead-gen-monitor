@@ -1207,12 +1207,15 @@ function deletePersona(i) {
 }
 
 function savePersona() {
-  const name = document.getElementById('p-name').value.trim();
-  const prompt = document.getElementById('p-prompt').value.trim();
-  if (!name || !prompt) { alert('Name and prompt are required.'); return; }
+  const nameEl = document.getElementById('p-name');
+  const promptEl = document.getElementById('p-prompt');
+  if (!nameEl || !promptEl) { alert('Form elements not found.'); return; }
+  const name = nameEl.value.trim();
+  const prompt = promptEl.value.trim();
+  if (!name) { alert('Please enter a name.'); return; }
+  if (!prompt) { alert('Please enter a prompt.'); return; }
 
   const persona = { name, prompt };
-
   const editIdx = document.getElementById('persona-id').value;
   if (editIdx !== '') {
     personas[parseInt(editIdx)] = persona;
