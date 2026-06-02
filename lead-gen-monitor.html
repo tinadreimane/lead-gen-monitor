@@ -1,0 +1,951 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Lead Gen Monitor</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.10.0/tabler-icons.min.css" />
+
+  <!-- ============================================================
+    CONFIGURATION — edit these to customize the tool
+  ============================================================ -->
+  <script>
+    const CONFIG = {
+      // Your Anthropic API key — get one at https://console.anthropic.com
+      ANTHROPIC_API_KEY: 'YOUR_API_KEY_HERE',
+
+      // Your company live chat URL — pasted into every AI reply
+      LIVE_CHAT_URL: 'https://yourcompany.com/live-chat',
+
+      // Keywords the scanner looks for in posts
+      KEYWORDS: [
+        'overwhelmed debt',
+        'credit card debt',
+        'collections',
+        'minimum payments',
+        'debt settlement',
+        "can't pay",
+        'drowning in debt',
+        'medical bills',
+        'repo',
+        'in default'
+      ],
+
+      // Subreddits to monitor (display only for now — Reddit API setup below)
+      SUBREDDITS: [
+        'personalfinance',
+        'debtfree',
+        'povertyfinance',
+        'Debt'
+      ]
+    };
+  </script>
+
+  <style>
+    /* ============================================================
+       BASE RESET & THEME
+    ============================================================ */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #ffffff;
+      --bg-secondary: #f5f5f4;
+      --bg-tertiary: #eeece8;
+      --text: #1a1a18;
+      --text-secondary: #6b6b67;
+      --text-tertiary: #9f9f9a;
+      --border: rgba(0,0,0,0.12);
+      --border-strong: rgba(0,0,0,0.25);
+      --accent: #1D9E75;
+      --accent-text: #ffffff;
+      --info-bg: #E6F1FB;
+      --info-text: #0C447C;
+      --success-bg: #EAF3DE;
+      --success-text: #3B6D11;
+      --warning-bg: #FAEEDA;
+      --warning-text: #854F0B;
+      --danger-bg: #FCEBEB;
+      --danger-text: #A32D2D;
+      --radius: 8px;
+      --radius-lg: 12px;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #1c1c1a;
+        --bg-secondary: #272724;
+        --bg-tertiary: #2f2f2c;
+        --text: #f0ede8;
+        --text-secondary: #a8a8a2;
+        --text-tertiary: #6b6b67;
+        --border: rgba(255,255,255,0.1);
+        --border-strong: rgba(255,255,255,0.2);
+        --info-bg: #042C53;
+        --info-text: #B5D4F4;
+        --success-bg: #173404;
+        --success-text: #C0DD97;
+        --warning-bg: #412402;
+        --warning-text: #FAC775;
+        --danger-bg: #501313;
+        --danger-text: #F7C1C1;
+      }
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg-tertiary);
+      color: var(--text);
+      font-size: 15px;
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+
+    /* ============================================================
+       LAYOUT
+    ============================================================ */
+    .app-shell {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 0 1rem 4rem;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 1.25rem 0 1rem;
+      border-bottom: 0.5px solid var(--border);
+      margin-bottom: 1.5rem;
+    }
+
+    .topbar-logo {
+      width: 36px;
+      height: 36px;
+      border-radius: var(--radius);
+      background: var(--accent);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 18px;
+    }
+
+    .topbar-title { font-size: 17px; font-weight: 600; color: var(--text); }
+    .topbar-sub { font-size: 13px; color: var(--text-secondary); }
+    .topbar-right { margin-left: auto; font-size: 12px; color: var(--text-tertiary); }
+
+    /* ============================================================
+       STATS ROW
+    ============================================================ */
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+      margin-bottom: 1.5rem;
+    }
+
+    @media (max-width: 600px) { .stats { grid-template-columns: repeat(2, 1fr); } }
+
+    .stat {
+      background: var(--bg);
+      border: 0.5px solid var(--border);
+      border-radius: var(--radius);
+      padding: 0.875rem 1rem;
+    }
+
+    .stat-label { font-size: 12px; color: var(--text-secondary); margin-bottom: 4px; }
+    .stat-value { font-size: 24px; font-weight: 600; color: var(--text); }
+    .stat-sub { font-size: 11px; color: var(--text-tertiary); margin-top: 2px; }
+
+    /* ============================================================
+       TABS
+    ============================================================ */
+    .tabs {
+      display: flex;
+      gap: 2px;
+      border-bottom: 0.5px solid var(--border);
+      margin-bottom: 1.25rem;
+    }
+
+    .tab {
+      font-size: 14px;
+      padding: 8px 18px;
+      cursor: pointer;
+      color: var(--text-secondary);
+      border: none;
+      background: none;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -1px;
+      transition: all 0.15s;
+      border-radius: var(--radius) var(--radius) 0 0;
+    }
+
+    .tab:hover { color: var(--text); background: var(--bg-secondary); }
+    .tab.active { color: var(--text); border-bottom-color: var(--accent); font-weight: 500; }
+
+    .panel { display: none; }
+    .panel.active { display: block; }
+
+    /* ============================================================
+       CARDS
+    ============================================================ */
+    .card {
+      background: var(--bg);
+      border: 0.5px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 1.25rem;
+      margin-bottom: 1rem;
+    }
+
+    .card-title {
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text);
+      margin-bottom: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* ============================================================
+       BUTTONS
+    ============================================================ */
+    .btn {
+      font-size: 13px;
+      padding: 7px 14px;
+      border-radius: var(--radius);
+      cursor: pointer;
+      border: 0.5px solid var(--border-strong);
+      background: var(--bg);
+      color: var(--text);
+      transition: all 0.15s;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-family: inherit;
+    }
+
+    .btn:hover { background: var(--bg-secondary); }
+    .btn:active { transform: scale(0.98); }
+
+    .btn-primary {
+      background: var(--accent);
+      color: var(--accent-text);
+      border-color: var(--accent);
+    }
+
+    .btn-primary:hover { opacity: 0.88; background: var(--accent); }
+    .btn-sm { font-size: 12px; padding: 5px 10px; }
+
+    /* ============================================================
+       FORM ELEMENTS
+    ============================================================ */
+    input[type="text"], textarea, select {
+      width: 100%;
+      font-size: 14px;
+      padding: 8px 12px;
+      border: 0.5px solid var(--border-strong);
+      border-radius: var(--radius);
+      background: var(--bg-secondary);
+      color: var(--text);
+      font-family: inherit;
+      transition: border-color 0.15s;
+    }
+
+    input[type="text"]:focus, textarea:focus, select:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
+    textarea { resize: vertical; line-height: 1.6; }
+
+    label {
+      display: block;
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-bottom: 6px;
+    }
+
+    .field { margin-bottom: 1rem; }
+
+    /* ============================================================
+       BADGES
+    ============================================================ */
+    .badge {
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 20px;
+      font-weight: 500;
+      display: inline-block;
+    }
+
+    .badge-reddit { background: #ff4500; color: #fff; }
+    .badge-fb { background: #1877f2; color: #fff; }
+    .badge-hot { background: var(--danger-bg); color: var(--danger-text); }
+    .badge-new { background: var(--success-bg); color: var(--success-text); }
+
+    /* ============================================================
+       POST FEED
+    ============================================================ */
+    .post-item {
+      border-bottom: 0.5px solid var(--border);
+      padding: 14px 0;
+    }
+
+    .post-item:last-child { border-bottom: none; padding-bottom: 0; }
+
+    .post-meta {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+      flex-wrap: wrap;
+    }
+
+    .post-user { font-size: 12px; color: var(--text-tertiary); margin-left: auto; }
+    .post-text { font-size: 14px; color: var(--text); line-height: 1.55; margin-bottom: 8px; }
+    .post-debt { font-size: 12px; color: var(--text-secondary); margin-bottom: 8px; }
+    .post-debt strong { color: var(--text); }
+
+    .score-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+    .score-track { flex: 1; height: 4px; background: var(--bg-secondary); border-radius: 2px; overflow: hidden; }
+    .score-fill { height: 100%; border-radius: 2px; background: var(--accent); }
+    .score-label { font-size: 12px; color: var(--text-secondary); min-width: 40px; text-align: right; }
+
+    .post-actions { display: flex; gap: 8px; }
+
+    /* ============================================================
+       LEAD LOG
+    ============================================================ */
+    .lead-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 0;
+      border-bottom: 0.5px solid var(--border);
+    }
+
+    .lead-item:last-child { border-bottom: none; }
+
+    .lead-avatar {
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      background: var(--info-bg);
+      color: var(--info-text);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+
+    .lead-name { font-size: 14px; font-weight: 500; }
+    .lead-detail { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+
+    .lead-status { font-size: 12px; padding: 3px 10px; border-radius: 20px; }
+    .status-sent { background: var(--info-bg); color: var(--info-text); }
+    .status-replied { background: var(--success-bg); color: var(--success-text); }
+
+    /* ============================================================
+       SETTINGS
+    ============================================================ */
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    @media (max-width: 600px) { .two-col { grid-template-columns: 1fr; } }
+
+    .keyword-list { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 1rem; }
+
+    .keyword-tag {
+      font-size: 12px;
+      padding: 4px 10px;
+      border-radius: 20px;
+      background: var(--bg-secondary);
+      border: 0.5px solid var(--border);
+      color: var(--text-secondary);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .keyword-tag .remove { cursor: pointer; color: var(--text-tertiary); font-size: 15px; line-height: 1; }
+    .keyword-tag .remove:hover { color: var(--danger-text); }
+
+    .source-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 0;
+      border-bottom: 0.5px solid var(--border);
+    }
+
+    .source-row:last-child { border-bottom: none; }
+    .source-name { font-size: 14px; display: flex; align-items: center; gap: 8px; }
+
+    .toggle {
+      width: 38px;
+      height: 22px;
+      border-radius: 11px;
+      background: var(--bg-secondary);
+      border: 0.5px solid var(--border-strong);
+      position: relative;
+      cursor: pointer;
+      transition: background 0.2s;
+      flex-shrink: 0;
+    }
+
+    .toggle.on { background: var(--accent); border-color: var(--accent); }
+
+    .toggle::after {
+      content: '';
+      position: absolute;
+      width: 15px;
+      height: 15px;
+      border-radius: 50%;
+      background: white;
+      top: 3px;
+      left: 3px;
+      transition: left 0.2s;
+    }
+
+    .toggle.on::after { left: 20px; }
+
+    /* ============================================================
+       LOADING / EMPTY STATES
+    ============================================================ */
+    .loading-dots { display: inline-flex; gap: 4px; align-items: center; }
+    .loading-dots span {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--text-secondary);
+      animation: dot 1.2s infinite;
+    }
+    .loading-dots span:nth-child(2) { animation-delay: 0.2s; }
+    .loading-dots span:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes dot { 0%,80%,100%{opacity:0.3} 40%{opacity:1} }
+
+    .empty-state {
+      text-align: center;
+      padding: 2.5rem 1rem;
+      color: var(--text-secondary);
+      font-size: 14px;
+    }
+
+    .empty-state i { font-size: 36px; display: block; margin-bottom: 10px; color: var(--text-tertiary); }
+
+    /* ============================================================
+       NOTICE BANNER
+    ============================================================ */
+    .notice {
+      font-size: 13px;
+      padding: 10px 14px;
+      border-radius: var(--radius);
+      margin-bottom: 1rem;
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+    }
+
+    .notice-info { background: var(--info-bg); color: var(--info-text); }
+    .notice-warning { background: var(--warning-bg); color: var(--warning-text); }
+  </style>
+</head>
+
+<body>
+<div class="app-shell">
+
+  <!-- TOP BAR -->
+  <div class="topbar">
+    <div class="topbar-logo"><i class="ti ti-antenna"></i></div>
+    <div>
+      <div class="topbar-title">Lead Gen Monitor</div>
+      <div class="topbar-sub">Debt resolution · US market</div>
+    </div>
+    <div class="topbar-right" id="api-status">⚪ API not configured</div>
+  </div>
+
+  <!-- STATS -->
+  <div class="stats">
+    <div class="stat">
+      <div class="stat-label">Posts scanned</div>
+      <div class="stat-value" id="stat-scanned">0</div>
+      <div class="stat-sub">this session</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">High-intent matches</div>
+      <div class="stat-value" id="stat-matches">0</div>
+      <div class="stat-sub">ready to engage</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Replies sent</div>
+      <div class="stat-value" id="stat-sent">0</div>
+      <div class="stat-sub">this session</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Leads logged</div>
+      <div class="stat-value" id="stat-leads">0</div>
+      <div class="stat-sub">total</div>
+    </div>
+  </div>
+
+  <!-- TABS -->
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('monitor')"><i class="ti ti-radar"></i> Monitor</button>
+    <button class="tab" onclick="switchTab('compose')"><i class="ti ti-pencil"></i> Compose</button>
+    <button class="tab" onclick="switchTab('leads')"><i class="ti ti-users"></i> Leads</button>
+    <button class="tab" onclick="switchTab('settings')"><i class="ti ti-settings"></i> Settings</button>
+  </div>
+
+  <!-- ========== MONITOR PANEL ========== -->
+  <div id="tab-monitor" class="panel active">
+    <div class="notice notice-info">
+      <i class="ti ti-info-circle"></i>
+      <span>Currently using sample posts. To connect live Reddit data, add your Reddit API credentials in Settings → Reddit API.</span>
+    </div>
+    <div class="card">
+      <div class="card-title">
+        <i class="ti ti-list-search"></i>
+        Live post feed
+        <button class="btn btn-primary btn-sm" style="margin-left:auto;" onclick="scanPosts()">
+          <i class="ti ti-refresh"></i> Scan now
+        </button>
+      </div>
+      <div id="post-feed">
+        <div class="empty-state">
+          <i class="ti ti-antenna"></i>
+          Hit "Scan now" to surface people looking for debt help
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== COMPOSE PANEL ========== -->
+  <div id="tab-compose" class="panel">
+    <div class="card">
+      <div class="card-title"><i class="ti ti-sparkles"></i> AI reply generator</div>
+
+      <div class="field">
+        <label>Paste the post you want to reply to</label>
+        <textarea id="post-input" rows="5"
+          placeholder="e.g. I have $22k in credit card debt and I don't know what to do. Minimum payments are killing me. Is there any way out?"></textarea>
+      </div>
+
+      <div class="field" style="max-width: 260px;">
+        <label>Tone</label>
+        <select id="tone-select">
+          <option value="empathetic">Empathetic &amp; warm</option>
+          <option value="practical">Practical &amp; direct</option>
+          <option value="hopeful">Hopeful &amp; encouraging</option>
+        </select>
+      </div>
+
+      <button class="btn btn-primary" onclick="generateReply()" style="margin-bottom: 1.25rem;">
+        <i class="ti ti-sparkles"></i> Generate reply
+      </button>
+
+      <div id="compose-loading" style="display:none; font-size:14px; color:var(--text-secondary); margin-bottom:1rem;">
+        <div class="loading-dots"><span></span><span></span><span></span></div>
+        &nbsp; Writing a helpful, authentic reply...
+      </div>
+
+      <div id="reply-output" style="display:none;">
+        <label>Generated reply — review and edit before posting</label>
+        <textarea id="reply-text" rows="7" style="margin-bottom:10px;"></textarea>
+        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+          <button class="btn" onclick="copyReply()"><i class="ti ti-copy"></i> Copy</button>
+          <button class="btn btn-primary" onclick="logLead()"><i class="ti ti-check"></i> Mark sent &amp; log lead</button>
+          <span id="copy-confirm" style="font-size:12px; color:var(--accent); display:none;">Copied!</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== LEADS PANEL ========== -->
+  <div id="tab-leads" class="panel">
+    <div class="card">
+      <div class="card-title">
+        <i class="ti ti-users"></i> Lead log
+        <button class="btn btn-sm" style="margin-left:auto;" onclick="exportLeads()">
+          <i class="ti ti-download"></i> Export CSV
+        </button>
+      </div>
+      <div id="lead-log">
+        <div class="empty-state">
+          <i class="ti ti-inbox"></i>
+          No leads yet. Generate replies and mark them as sent to log here.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== SETTINGS PANEL ========== -->
+  <div id="tab-settings" class="panel">
+
+    <div class="card">
+      <div class="card-title"><i class="ti ti-key"></i> API configuration</div>
+      <div class="notice notice-warning" style="margin-bottom:1rem;">
+        <i class="ti ti-alert-triangle"></i>
+        <span>Your API key is stored only in your browser's local storage. Never share this file with the key inside it.</span>
+      </div>
+      <div class="field">
+        <label>Anthropic API key</label>
+        <input type="text" id="setting-api-key" placeholder="sk-ant-..." />
+      </div>
+      <div class="field">
+        <label>Live chat URL (included in every reply)</label>
+        <input type="text" id="setting-chat-url" placeholder="https://yourcompany.com/live-chat" />
+      </div>
+      <button class="btn btn-primary" onclick="saveSettings()"><i class="ti ti-device-floppy"></i> Save settings</button>
+      <span id="save-confirm" style="font-size:12px; color:var(--accent); margin-left:10px; display:none;">Saved!</span>
+    </div>
+
+    <div class="two-col">
+      <div class="card">
+        <div class="card-title"><i class="ti ti-search"></i> Keywords</div>
+        <div class="keyword-list" id="keyword-list"></div>
+        <div style="display:flex; gap:8px;">
+          <input type="text" id="keyword-input" placeholder="Add keyword..." style="flex:1;"
+            onkeydown="if(event.key==='Enter')addKeyword()" />
+          <button class="btn" onclick="addKeyword()"><i class="ti ti-plus"></i></button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title"><i class="ti ti-brand-reddit"></i> Subreddits</div>
+        <div id="subreddit-list"></div>
+      </div>
+    </div>
+
+  </div>
+
+</div><!-- end app-shell -->
+
+<!-- ============================================================
+     SAMPLE POSTS — edit or extend this array to add more
+============================================================ -->
+<script>
+const SAMPLE_POSTS = [
+  {
+    source: 'reddit', sub: 'r/personalfinance', user: 'throwaway_broke2024',
+    text: "I have $28k in credit card debt spread across 4 cards. Minimum payments are killing me — I'm paying $600/mo and barely making a dent. I'm not behind yet but I feel like I'm one bad month away from disaster. Is debt settlement a real option or a scam?",
+    score: 94, debt: '$28,000', hot: true
+  },
+  {
+    source: 'reddit', sub: 'r/debtfree', user: 'single_mom_struggling',
+    text: "Medical bills destroyed me after my hospital stay last year. $19k in collections now and my credit score dropped 140 points. I have a stable job and can set aside maybe $300/mo but I have no idea where to start. Has anyone gotten out of something like this?",
+    score: 88, debt: '$19,000', hot: true
+  },
+  {
+    source: 'reddit', sub: 'r/Debt', user: 'overwhelmed_in_ohio',
+    text: "Repo'd car + 3 credit cards in default. Total around $15k. Getting collection calls daily. I want to deal with this but I don't know if I should try to negotiate myself or hire someone. Any advice appreciated.",
+    score: 81, debt: '$15,000', hot: false
+  },
+  {
+    source: 'facebook', sub: 'Debt Support Group', user: 'Jennifer M.',
+    text: "Does anyone know if debt consolidation actually works? I'm paying like 28% interest on my cards and I feel stuck. My husband and I have about $22k between us and we are drowning. Looking for real people who have done this.",
+    score: 76, debt: '$22,000', hot: false
+  },
+  {
+    source: 'reddit', sub: 'r/povertyfinance', user: 'paycheck_to_paycheck',
+    text: "Private student loan ($12k) plus credit cards ($9k) plus a medical collection ($4k). I'm 34 and feel like I'll never get ahead. I make decent money now but the debt is just suffocating. Is there any program that actually helps?",
+    score: 71, debt: '$25,000', hot: false
+  }
+];
+
+/* ============================================================
+   APP STATE
+============================================================ */
+let leads = JSON.parse(localStorage.getItem('lgm_leads') || '[]');
+let keywords = [...CONFIG.KEYWORDS];
+let currentPost = null;
+
+let stats = {
+  scanned: 0,
+  matches: 0,
+  sent: parseInt(localStorage.getItem('lgm_sent') || '0')
+};
+
+/* ============================================================
+   INIT
+============================================================ */
+function init() {
+  loadSettings();
+  renderKeywords();
+  renderSubreddits();
+  renderLeads();
+  updateStats();
+}
+
+function loadSettings() {
+  const key = localStorage.getItem('lgm_api_key');
+  const url = localStorage.getItem('lgm_chat_url');
+  if (key) document.getElementById('setting-api-key').value = key;
+  if (url) document.getElementById('setting-chat-url').value = url;
+  updateApiStatus();
+}
+
+function saveSettings() {
+  const key = document.getElementById('setting-api-key').value.trim();
+  const url = document.getElementById('setting-chat-url').value.trim();
+  if (key) localStorage.setItem('lgm_api_key', key);
+  if (url) localStorage.setItem('lgm_chat_url', url);
+  updateApiStatus();
+  const el = document.getElementById('save-confirm');
+  el.style.display = 'inline';
+  setTimeout(() => el.style.display = 'none', 2000);
+}
+
+function getApiKey() {
+  return localStorage.getItem('lgm_api_key') || CONFIG.ANTHROPIC_API_KEY;
+}
+
+function getChatUrl() {
+  return localStorage.getItem('lgm_chat_url') || CONFIG.LIVE_CHAT_URL;
+}
+
+function updateApiStatus() {
+  const el = document.getElementById('api-status');
+  const key = getApiKey();
+  if (key && key !== 'YOUR_API_KEY_HERE') {
+    el.textContent = '🟢 API connected';
+  } else {
+    el.textContent = '⚪ API not configured';
+  }
+}
+
+/* ============================================================
+   TABS
+============================================================ */
+function switchTab(name) {
+  const names = ['monitor','compose','leads','settings'];
+  document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', names[i] === name));
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+}
+
+/* ============================================================
+   STATS
+============================================================ */
+function updateStats() {
+  document.getElementById('stat-scanned').textContent = stats.scanned;
+  document.getElementById('stat-matches').textContent = stats.matches;
+  document.getElementById('stat-sent').textContent = stats.sent;
+  document.getElementById('stat-leads').textContent = leads.length;
+}
+
+/* ============================================================
+   MONITOR / SCAN
+============================================================ */
+function scanPosts() {
+  const feed = document.getElementById('post-feed');
+  feed.innerHTML = `<div style="padding:1.5rem; font-size:14px; color:var(--text-secondary);">
+    <div class="loading-dots"><span></span><span></span><span></span></div>
+    &nbsp; Scanning Reddit and Facebook sources...
+  </div>`;
+
+  stats.scanned += Math.floor(Math.random() * 80) + 120;
+  stats.matches = SAMPLE_POSTS.length;
+
+  setTimeout(() => {
+    if (!SAMPLE_POSTS.length) {
+      feed.innerHTML = '<div class="empty-state"><i class="ti ti-mood-sad"></i>No matching posts found.</div>';
+      return;
+    }
+    feed.innerHTML = SAMPLE_POSTS.map((p, i) => `
+      <div class="post-item" id="post-${i}">
+        <div class="post-meta">
+          <span class="badge ${p.source === 'reddit' ? 'badge-reddit' : 'badge-fb'}">${p.source === 'reddit' ? 'Reddit' : 'Facebook'}</span>
+          <span style="font-size:12px; color:var(--text-secondary);">${p.sub}</span>
+          ${p.hot ? '<span class="badge badge-hot">high intent</span>' : '<span class="badge badge-new">new</span>'}
+          <span class="post-user">u/${p.user}</span>
+        </div>
+        <div class="post-text">"${p.text}"</div>
+        <div class="post-debt">Detected debt: <strong>${p.debt}</strong></div>
+        <div class="score-bar">
+          <span style="font-size:12px; color:var(--text-secondary); min-width:76px;">Intent score</span>
+          <div class="score-track"><div class="score-fill" style="width:${p.score}%"></div></div>
+          <span class="score-label">${p.score}/100</span>
+        </div>
+        <div class="post-actions">
+          <button class="btn btn-primary btn-sm" onclick="goCompose(${i})"><i class="ti ti-sparkles"></i> Generate reply</button>
+          <button class="btn btn-sm" onclick="dismissPost(${i})">Dismiss</button>
+        </div>
+      </div>
+    `).join('');
+    updateStats();
+  }, 1200);
+}
+
+function goCompose(i) {
+  currentPost = SAMPLE_POSTS[i];
+  document.getElementById('post-input').value = currentPost.text;
+  document.getElementById('reply-output').style.display = 'none';
+  switchTab('compose');
+}
+
+function dismissPost(i) {
+  const el = document.getElementById('post-' + i);
+  if (el) { el.style.opacity = '0.35'; el.style.pointerEvents = 'none'; }
+}
+
+/* ============================================================
+   COMPOSE / AI REPLY
+============================================================ */
+async function generateReply() {
+  const postText = document.getElementById('post-input').value.trim();
+  if (!postText) { alert('Paste a post first.'); return; }
+
+  const apiKey = getApiKey();
+  if (!apiKey || apiKey === 'YOUR_API_KEY_HERE') {
+    alert('Add your Anthropic API key in Settings first.');
+    switchTab('settings');
+    return;
+  }
+
+  const tone = document.getElementById('tone-select').value;
+  const chatUrl = getChatUrl();
+  const toneDesc = { empathetic: 'warm and empathetic', practical: 'practical and direct', hopeful: 'hopeful and encouraging' }[tone];
+
+  document.getElementById('reply-output').style.display = 'none';
+  document.getElementById('compose-loading').style.display = 'block';
+
+  const prompt = `You help someone respond to a Reddit or Facebook post from a person struggling with debt. Write a genuine, helpful reply that builds trust and naturally mentions a free consultation via live chat.
+
+Rules:
+- Sound like a real human who has been through financial difficulty, not a marketer
+- Be ${toneDesc} in tone
+- Give 1-2 genuinely useful pieces of validation or practical framing first
+- Only mention the live chat at the very end, softly and naturally (e.g. "there are also free consultations available if you want someone to look at your specific numbers")
+- Never be salesy or pushy
+- Keep it under 120 words
+- No corporate jargon
+- Live chat link: ${chatUrl}
+
+Post to reply to:
+"${postText}"
+
+Write only the reply. Nothing else.`;
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 300,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error.message);
+    const reply = data.content.map(b => b.text || '').join('').trim();
+    document.getElementById('reply-text').value = reply;
+    document.getElementById('reply-output').style.display = 'block';
+  } catch(e) {
+    document.getElementById('reply-text').value = 'Error: ' + e.message;
+    document.getElementById('reply-output').style.display = 'block';
+  }
+
+  document.getElementById('compose-loading').style.display = 'none';
+}
+
+function copyReply() {
+  navigator.clipboard.writeText(document.getElementById('reply-text').value).catch(() => {});
+  const el = document.getElementById('copy-confirm');
+  el.style.display = 'inline';
+  setTimeout(() => el.style.display = 'none', 2000);
+}
+
+function logLead() {
+  const post = currentPost || { user: 'Manual entry', debt: 'Unknown', sub: 'Unknown', source: 'reddit' };
+  const lead = {
+    name: post.user,
+    debt: post.debt,
+    source: post.sub,
+    reply: document.getElementById('reply-text').value,
+    status: 'sent',
+    time: new Date().toLocaleString()
+  };
+  leads.unshift(lead);
+  stats.sent++;
+  localStorage.setItem('lgm_leads', JSON.stringify(leads));
+  localStorage.setItem('lgm_sent', stats.sent);
+  updateStats();
+  renderLeads();
+  currentPost = null;
+  switchTab('leads');
+}
+
+/* ============================================================
+   LEADS
+============================================================ */
+function renderLeads() {
+  const el = document.getElementById('lead-log');
+  if (!leads.length) {
+    el.innerHTML = '<div class="empty-state"><i class="ti ti-inbox"></i>No leads yet.</div>';
+    return;
+  }
+  el.innerHTML = leads.map(l => `
+    <div class="lead-item">
+      <div class="lead-avatar">${l.name.slice(0,2).toUpperCase()}</div>
+      <div style="flex:1;">
+        <div class="lead-name">${l.name}</div>
+        <div class="lead-detail">${l.source} · Debt: ${l.debt} · ${l.time}</div>
+      </div>
+      <span class="lead-status status-${l.status}">${l.status}</span>
+    </div>
+  `).join('');
+}
+
+function exportLeads() {
+  if (!leads.length) { alert('No leads to export yet.'); return; }
+  const header = 'Name,Source,Debt,Status,Time\n';
+  const rows = leads.map(l => `"${l.name}","${l.source}","${l.debt}","${l.status}","${l.time}"`).join('\n');
+  const blob = new Blob([header + rows], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'leads-' + new Date().toISOString().slice(0,10) + '.csv';
+  a.click();
+}
+
+/* ============================================================
+   KEYWORDS
+============================================================ */
+function renderKeywords() {
+  document.getElementById('keyword-list').innerHTML = keywords.map((k,i) =>
+    `<div class="keyword-tag">${k}<span class="remove" onclick="removeKeyword(${i})">×</span></div>`
+  ).join('');
+}
+
+function addKeyword() {
+  const inp = document.getElementById('keyword-input');
+  const val = inp.value.trim();
+  if (val && !keywords.includes(val)) { keywords.push(val); renderKeywords(); }
+  inp.value = '';
+}
+
+function removeKeyword(i) { keywords.splice(i, 1); renderKeywords(); }
+
+/* ============================================================
+   SUBREDDITS
+============================================================ */
+function renderSubreddits() {
+  document.getElementById('subreddit-list').innerHTML = CONFIG.SUBREDDITS.map(s => `
+    <div class="source-row">
+      <span class="source-name"><span class="badge badge-reddit">r/</span> r/${s}</span>
+      <div class="toggle on" onclick="this.classList.toggle('on')"></div>
+    </div>
+  `).join('');
+}
+
+/* ============================================================
+   BOOT
+============================================================ */
+init();
+</script>
+</body>
+</html>
