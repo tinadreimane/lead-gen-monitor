@@ -1034,8 +1034,8 @@ Write only the reply. Nothing else.`;
     if (data.error) throw new Error(data.error.message);
     const reply = data.content.map(b => b.text || '').join('').trim();
     const cleanReply = reply
-  .replace(/https?:\/\/bit\.ly\/3RM5oua/g, '[turbodebt.com](https://bit.ly/3RM5oua)')
-  .replace(/turbodebt\.com(?!\))/g, '[turbodebt.com](https://bit.ly/3RM5oua)');
+  .replace(/https?:\/\/bit\.ly\/3RM5oua/g, '[turbodebt.com](https://lead-gen-monitor.vercel.app/api/track)')
+      .replace(/turbodebt\.com(?!\))/g, '[turbodebt.com](https://lead-gen-monitor.vercel.app/api/track)');
 document.getElementById('reply-text').value = cleanReply;
     document.getElementById('reply-output').style.display = 'block';
   } catch(e) {
