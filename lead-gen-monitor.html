@@ -593,7 +593,7 @@
 
   <!-- PERSONA MODAL -->
   <div id="persona-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:100; overflow-y:auto; padding:2rem 1rem;">
-    <div style="max-width:580px; margin:0 auto; background:var(--bg); border-radius:var(--radius-lg); padding:1.5rem;">
+    <div style="max-width:640px; margin:0 auto; background:var(--bg); border-radius:var(--radius-lg); padding:1.5rem;">
       <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1.25rem;">
         <h3 style="font-size:16px; font-weight:600;" id="modal-title">New persona</h3>
         <button class="btn btn-sm" onclick="closePersonaModal()"><i class="ti ti-x"></i></button>
@@ -602,58 +602,38 @@
       <input type="hidden" id="persona-id" />
 
       <div class="field">
-        <label>Name <span style="color:var(--danger-text);">*</span></label>
-        <input type="text" id="p-name" placeholder="e.g. Mike" />
+        <label>Persona name <span style="color:var(--danger-text);">*</span></label>
+        <input type="text" id="p-name" placeholder="e.g. Mike" style="max-width:260px;" />
       </div>
 
-      <div style="display:flex; gap:12px;">
-        <div class="field" style="flex:1;">
-          <label>Age</label>
-          <input type="text" id="p-age" placeholder="e.g. 48" />
+      <div class="field">
+        <label style="font-size:14px; font-weight:500; color:var(--text);">Prompt <span style="color:var(--danger-text);">*</span></label>
+        <div style="font-size:12px; color:var(--text-secondary); margin-bottom:8px; line-height:1.6;">
+          Write exactly how you want the AI to behave. Use
+          <code style="background:var(--bg-secondary); padding:1px 5px; border-radius:4px;">{{post}}</code> where the Reddit post goes and
+          <code style="background:var(--bg-secondary); padding:1px 5px; border-radius:4px;">{{url}}</code> where your link goes.
         </div>
-        <div class="field" style="flex:1;">
-          <label>Location</label>
-          <input type="text" id="p-location" placeholder="e.g. Ohio" />
-        </div>
-      </div>
+        <textarea id="p-prompt" rows="16" placeholder="Example:
 
-      <div class="field">
-        <label>Occupation</label>
-        <input type="text" id="p-job" placeholder="e.g. Construction worker" />
-      </div>
+You are Mike, 48, construction worker from Ohio. Divorced, paid child support for years. Got out of $31k in credit card debt through debt settlement — took 3 years but you did it.
 
-      <div class="field">
-        <label>Debt backstory <span style="color:var(--danger-text);">*</span></label>
-        <textarea id="p-backstory" rows="3" placeholder="e.g. Got into $31k of credit card debt after a divorce and child support payments. Took 3 years to get out through debt settlement. Knows what it feels like to be drowning."></textarea>
-      </div>
+Write a Reddit reply to this post like a real person texting a friend. Short sentences. No fluff. No corporate words. Occasional lowercase. Get to the point fast. Never sound like an ad. Under 120 words.
 
-      <div class="field">
-        <label>Writing style <span style="color:var(--danger-text);">*</span></label>
-        <textarea id="p-style" rows="3" placeholder="e.g. Short sentences. Casual, no punctuation sometimes. Uses 'man' occasionally. Gets to the point fast. Never uses fancy words. Typos sometimes. Sounds like a text message not an essay."></textarea>
-      </div>
+Give 1-2 genuine observations first. Only at the very end drop this naturally — no hard sell:
+[free consult]({{url}})
 
-      <div class="field">
-        <label>Default tone</label>
-        <select id="p-tone">
-          <option value="empathetic">Empathetic &amp; warm</option>
-          <option value="practical">Practical &amp; direct</option>
-          <option value="hopeful">Hopeful &amp; encouraging</option>
-          <option value="tough">Tough love</option>
-        </select>
-      </div>
+Post:
+{{post}}
 
-      <div class="field">
-        <label>Things this persona NEVER says or does</label>
-        <textarea id="p-never" rows="2" placeholder="e.g. Never mentions specific companies. Never sounds like an ad. Never uses words like 'delve', 'journey', 'empower'. Never writes long paragraphs."></textarea>
-      </div>
-
-      <div class="field">
-        <label>Extra context (hobbies, personality, other details)</label>
-        <textarea id="p-extra" rows="2" placeholder="e.g. Loves fishing and construction. Divorced, pays child support. Bit cynical but genuinely wants to help people. Sometimes mentions fishing as a stress relief."></textarea>
+Reply only. Nothing else."></textarea>
       </div>
 
       <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:1rem;">
         <button class="btn" onclick="closePersonaModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="savePersona()"><i class="ti ti-device-floppy"></i> Save persona</button>
+      </div>
+    </div>
+  </div>
         <button class="btn btn-primary" onclick="savePersona()"><i class="ti ti-device-floppy"></i> Save persona</button>
       </div>
     </div>
@@ -1012,14 +992,22 @@ ${persona.extra ? 'Additional context: ' + persona.extra : ''}
   document.getElementById('reply-output').style.display = 'none';
   document.getElementById('compose-loading').style.display = 'block';
 
-  const prompt = `${personaBlock}
+  let finalPrompt = '';
+
+  if (persona && persona.prompt) {
+    // Use the custom prompt — replace {{post}} and {{url}} placeholders
+    finalPrompt = persona.prompt
+      .replace(/\{\{post\}\}/g, postText)
+      .replace(/\{\{url\}\}/g, chatUrl && chatUrl !== 'https://yourcompany.com/live-chat' ? chatUrl : '');
+  } else {
+    finalPrompt = `${personaBlock}
 Write a genuine Reddit reply to someone struggling with debt. You are a real person who has been through debt problems yourself, not a marketer or company rep.
 
 Rules:
 - Write EXACTLY like the persona described above — match their voice, vocabulary, sentence length
 - Be ${toneDesc} in tone
 - Give 1-2 genuine, useful observations or validation first
-- ${chatUrl && chatUrl !== 'https://yourcompany.com/live-chat' ? 'Only at the very end, very softly mention there are free consultations available: ' + chatUrl : 'Do NOT mention any service or link — just be helpful'}
+- ${chatUrl && chatUrl !== 'https://yourcompany.com/live-chat' ? 'Only at the very end, very softly mention there are free consultations available. Format the link as markdown: [free consultation](' + chatUrl + ')' : 'Do NOT mention any service or link — just be helpful'}
 - Never sound like an ad
 - Keep it under 120 words
 - No corporate jargon, no "I hope this helps", no "best of luck on your journey"
@@ -1028,6 +1016,7 @@ Post to reply to:
 "${postText}"
 
 Write only the reply. Nothing else.`;
+  }
 
   try {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -1041,7 +1030,7 @@ Write only the reply. Nothing else.`;
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',
         max_tokens: 300,
-        messages: [{ role: 'user', content: prompt }]
+        messages: [{ role: 'user', content: finalPrompt }]
       })
     });
     const data = await res.json();
@@ -1159,9 +1148,8 @@ function renderPersonaList() {
     <div class="lead-item">
       <div class="lead-avatar" style="background:var(--success-bg); color:var(--success-text);">${p.name.slice(0,2).toUpperCase()}</div>
       <div style="flex:1;">
-        <div class="lead-name">${p.name}${p.age ? ', ' + p.age : ''}${p.location ? ' · ' + p.location : ''}</div>
-        <div class="lead-detail">${p.job || ''} · Tone: ${p.tone}</div>
-        <div style="font-size:12px; color:var(--text-tertiary); margin-top:2px;">${p.backstory.slice(0,80)}...</div>
+        <div class="lead-name">${p.name}</div>
+        <div style="font-size:12px; color:var(--text-tertiary); margin-top:2px;">${p.prompt.slice(0,100)}...</div>
       </div>
       <div style="display:flex; gap:6px; flex-shrink:0;">
         <button class="btn btn-sm" onclick="editPersona(${i})"><i class="ti ti-pencil"></i></button>
@@ -1191,7 +1179,7 @@ function updatePersonaPreview() {
   const p = personas[parseInt(idx)];
   if (!p) { preview.style.display = 'none'; return; }
   preview.style.display = 'block';
-  preview.innerHTML = `<strong>${p.name}</strong>${p.age ? ', ' + p.age : ''}${p.location ? ' from ' + p.location : ''}${p.job ? ' · ' + p.job : ''}<br><span style="color:var(--text-tertiary);">${p.backstory.slice(0, 120)}...</span>`;
+  preview.innerHTML = `<strong>${p.name}</strong> · <span style="color:var(--text-tertiary);">${p.prompt.slice(0, 150)}...</span>`;
 }
 
 function openPersonaModal(editIdx) {
@@ -1201,17 +1189,10 @@ function openPersonaModal(editIdx) {
   if (editIdx !== undefined) {
     const p = personas[editIdx];
     document.getElementById('p-name').value = p.name || '';
-    document.getElementById('p-age').value = p.age || '';
-    document.getElementById('p-location').value = p.location || '';
-    document.getElementById('p-job').value = p.job || '';
-    document.getElementById('p-backstory').value = p.backstory || '';
-    document.getElementById('p-style').value = p.style || '';
-    document.getElementById('p-tone').value = p.tone || 'empathetic';
-    document.getElementById('p-never').value = p.never || '';
-    document.getElementById('p-extra').value = p.extra || '';
+    document.getElementById('p-prompt').value = p.prompt || '';
   } else {
-    ['p-name','p-age','p-location','p-job','p-backstory','p-style','p-never','p-extra'].forEach(id => document.getElementById(id).value = '');
-    document.getElementById('p-tone').value = 'empathetic';
+    document.getElementById('p-name').value = '';
+    document.getElementById('p-prompt').value = '';
   }
 }
 
@@ -1231,21 +1212,10 @@ function deletePersona(i) {
 
 function savePersona() {
   const name = document.getElementById('p-name').value.trim();
-  const backstory = document.getElementById('p-backstory').value.trim();
-  const style = document.getElementById('p-style').value.trim();
-  if (!name || !backstory || !style) { alert('Name, backstory and writing style are required.'); return; }
+  const prompt = document.getElementById('p-prompt').value.trim();
+  if (!name || !prompt) { alert('Name and prompt are required.'); return; }
 
-  const persona = {
-    name,
-    age: document.getElementById('p-age').value.trim(),
-    location: document.getElementById('p-location').value.trim(),
-    job: document.getElementById('p-job').value.trim(),
-    backstory,
-    style,
-    tone: document.getElementById('p-tone').value,
-    never: document.getElementById('p-never').value.trim(),
-    extra: document.getElementById('p-extra').value.trim()
-  };
+  const persona = { name, prompt };
 
   const editIdx = document.getElementById('persona-id').value;
   if (editIdx !== '') {
