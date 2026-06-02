@@ -499,7 +499,7 @@
   <div id="tab-monitor" class="panel active">
     <div class="notice notice-info">
       <i class="ti ti-info-circle"></i>
-      <span>Currently using sample posts. To connect live Reddit data, add your Reddit API credentials in Settings → Reddit API.</span>
+      <span>Live posts from r/personalfinance — filtered and scored by debt intent. Hit Scan to load the latest.</span>
     </div>
     <div class="card">
       <div class="card-title">
@@ -735,31 +735,101 @@ function updateStats() {
 /* ============================================================
    MONITOR / SCAN
 ============================================================ */
-function scanPosts() {
+let livePosts = [];
+
+function scorePost(text) {
+  const high = ['debt settlement','collections','minimum payment','credit card debt','drowning','can\'t pay','medical bill','repo','in default','overwhelmed','bankruptcy','collection calls'];
+  const med = ['debt','owe','credit card','interest rate','loan','monthly payment','financial','struggling','help'];
+  let score = 30;
+  const t = text.toLowerCase();
+  high.forEach(k => { if (t.includes(k)) score += 12; });
+  med.forEach(k => { if (t.includes(k)) score += 4; });
+  // boost for dollar amounts
+  const dollars = t.match(/\$[\d,]+k?/g);
+  if (dollars) score += Math.min(dollars.length * 6, 18);
+  return Math.min(score, 99);
+}
+
+function extractDebt(text) {
+  const m = text.match(/\$[\d,]+k?/g);
+  if (!m) return 'Unknown';
+  // return largest amount found
+  const amounts = m.map(a => {
+    const n = a.replace(/[$,]/g,'');
+    return n.endsWith('k') ? parseFloat(n) * 1000 : parseFloat(n);
+  });
+  const max = Math.max(...amounts);
+  return max >= 1000 ? '$' + max.toLocaleString() : m[0];
+}
+
+function isRelevant(post) {
+  const t = (post.title + ' ' + (post.selftext || '')).toLowerCase();
+  const triggers = ['debt','credit card','collection','loan','owe','bankruptcy','minimum payment','interest','financial','struggling','behind on','drowning'];
+  return triggers.some(k => t.includes(k));
+}
+
+async function scanPosts() {
   const feed = document.getElementById('post-feed');
   feed.innerHTML = `<div style="padding:1.5rem; font-size:14px; color:var(--text-secondary);">
     <div class="loading-dots"><span></span><span></span><span></span></div>
-    &nbsp; Scanning Reddit and Facebook sources...
+    &nbsp; Fetching live posts from r/personalfinance...
   </div>`;
 
-  stats.scanned += Math.floor(Math.random() * 80) + 120;
-  stats.matches = SAMPLE_POSTS.length;
+  try {
+    const res = await fetch('https://www.reddit.com/r/personalfinance/new.json?limit=50', {
+      headers: { 'Accept': 'application/json' }
+    });
 
-  setTimeout(() => {
-    if (!SAMPLE_POSTS.length) {
-      feed.innerHTML = '<div class="empty-state"><i class="ti ti-mood-sad"></i>No matching posts found.</div>';
+    if (!res.ok) throw new Error('Reddit fetch failed');
+
+    const data = await res.json();
+    const rawPosts = data.data.children.map(c => c.data);
+
+    // filter relevant posts
+    const filtered = rawPosts.filter(p => isRelevant(p) && p.selftext && p.selftext.length > 80);
+
+    stats.scanned = rawPosts.length;
+    stats.matches = filtered.length;
+
+    if (!filtered.length) {
+      feed.innerHTML = '<div class="empty-state"><i class="ti ti-mood-sad"></i>No matching posts found right now. Try again in a few minutes.</div>';
+      updateStats();
       return;
     }
-    feed.innerHTML = SAMPLE_POSTS.map((p, i) => `
+
+    // build our post objects
+    livePosts = filtered.map((p, i) => ({
+      index: i,
+      source: 'reddit',
+      sub: 'r/personalfinance',
+      user: p.author,
+      text: (p.title + '\n\n' + p.selftext).slice(0, 600),
+      title: p.title,
+      score: scorePost(p.title + ' ' + p.selftext),
+      debt: extractDebt(p.title + ' ' + p.selftext),
+      upvotes: p.ups,
+      comments: p.num_comments,
+      hot: scorePost(p.title + ' ' + p.selftext) >= 70,
+      url: 'https://reddit.com' + p.permalink,
+      age: timeAgo(p.created_utc)
+    }));
+
+    // sort by score
+    livePosts.sort((a,b) => b.score - a.score);
+
+    feed.innerHTML = livePosts.map((p, i) => `
       <div class="post-item" id="post-${i}">
         <div class="post-meta">
-          <span class="badge ${p.source === 'reddit' ? 'badge-reddit' : 'badge-fb'}">${p.source === 'reddit' ? 'Reddit' : 'Facebook'}</span>
+          <span class="badge badge-reddit">Reddit</span>
           <span style="font-size:12px; color:var(--text-secondary);">${p.sub}</span>
           ${p.hot ? '<span class="badge badge-hot">high intent</span>' : '<span class="badge badge-new">new</span>'}
-          <span class="post-user">u/${p.user}</span>
+          <span class="post-user">u/${p.user} · ${p.age}</span>
         </div>
-        <div class="post-text">"${p.text}"</div>
-        <div class="post-debt">Detected debt: <strong>${p.debt}</strong></div>
+        <div class="post-text">"${p.text.replace(/"/g,'&quot;').slice(0,400)}${p.text.length > 400 ? '...' : ''}"</div>
+        <div style="display:flex; gap:16px; margin-bottom:8px;">
+          <span class="post-debt">Debt detected: <strong>${p.debt}</strong></span>
+          <span style="font-size:12px; color:var(--text-secondary);">⬆ ${p.upvotes} · 💬 ${p.comments} comments</span>
+        </div>
         <div class="score-bar">
           <span style="font-size:12px; color:var(--text-secondary); min-width:76px;">Intent score</span>
           <div class="score-track"><div class="score-fill" style="width:${p.score}%"></div></div>
@@ -767,16 +837,28 @@ function scanPosts() {
         </div>
         <div class="post-actions">
           <button class="btn btn-primary btn-sm" onclick="goCompose(${i})"><i class="ti ti-sparkles"></i> Generate reply</button>
+          <a href="${p.url}" target="_blank" class="btn btn-sm"><i class="ti ti-external-link"></i> View on Reddit</a>
           <button class="btn btn-sm" onclick="dismissPost(${i})">Dismiss</button>
         </div>
       </div>
     `).join('');
+
     updateStats();
-  }, 1200);
+
+  } catch(e) {
+    feed.innerHTML = `<div class="empty-state"><i class="ti ti-wifi-off"></i>Couldn't fetch Reddit posts. This can happen due to browser CORS restrictions on some networks. Try opening the tool directly from your GitHub Pages link instead of locally.</div>`;
+  }
+}
+
+function timeAgo(utc) {
+  const diff = Math.floor(Date.now()/1000) - utc;
+  if (diff < 3600) return Math.floor(diff/60) + 'm ago';
+  if (diff < 86400) return Math.floor(diff/3600) + 'h ago';
+  return Math.floor(diff/86400) + 'd ago';
 }
 
 function goCompose(i) {
-  currentPost = SAMPLE_POSTS[i];
+  currentPost = livePosts[i] || SAMPLE_POSTS[i];
   document.getElementById('post-input').value = currentPost.text;
   document.getElementById('reply-output').style.display = 'none';
   switchTab('compose');
