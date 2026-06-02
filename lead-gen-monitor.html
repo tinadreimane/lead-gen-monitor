@@ -491,6 +491,7 @@
   <div class="tabs">
     <button class="tab active" onclick="switchTab('monitor')"><i class="ti ti-radar"></i> Monitor</button>
     <button class="tab" onclick="switchTab('compose')"><i class="ti ti-pencil"></i> Compose</button>
+    <button class="tab" onclick="switchTab('personas')"><i class="ti ti-masks-theater"></i> Personas</button>
     <button class="tab" onclick="switchTab('leads')"><i class="ti ti-users"></i> Leads</button>
     <button class="tab" onclick="switchTab('settings')"><i class="ti ti-settings"></i> Settings</button>
   </div>
@@ -529,14 +530,25 @@
           placeholder="e.g. I have $22k in credit card debt and I don't know what to do. Minimum payments are killing me. Is there any way out?"></textarea>
       </div>
 
-      <div class="field" style="max-width: 260px;">
-        <label>Tone</label>
-        <select id="tone-select">
-          <option value="empathetic">Empathetic &amp; warm</option>
-          <option value="practical">Practical &amp; direct</option>
-          <option value="hopeful">Hopeful &amp; encouraging</option>
-        </select>
+      <div style="display:flex; gap:12px; flex-wrap:wrap; margin-bottom:1rem;">
+        <div class="field" style="flex:1; min-width:180px; margin-bottom:0;">
+          <label>Persona</label>
+          <select id="persona-select">
+            <option value="">— No persona (generic) —</option>
+          </select>
+        </div>
+        <div class="field" style="flex:1; min-width:180px; margin-bottom:0;">
+          <label>Tone override</label>
+          <select id="tone-select">
+            <option value="auto">Auto (from persona)</option>
+            <option value="empathetic">Empathetic &amp; warm</option>
+            <option value="practical">Practical &amp; direct</option>
+            <option value="hopeful">Hopeful &amp; encouraging</option>
+          </select>
+        </div>
       </div>
+
+      <div id="persona-preview" style="display:none; font-size:12px; color:var(--text-secondary); background:var(--bg-secondary); border-radius:var(--radius); padding:10px 12px; margin-bottom:1rem; line-height:1.6;"></div>
 
       <button class="btn btn-primary" onclick="generateReply()" style="margin-bottom: 1.25rem;">
         <i class="ti ti-sparkles"></i> Generate reply
@@ -555,6 +567,94 @@
           <button class="btn btn-primary" onclick="logLead()"><i class="ti ti-check"></i> Mark sent &amp; log lead</button>
           <span id="copy-confirm" style="font-size:12px; color:var(--accent); display:none;">Copied!</span>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== PERSONAS PANEL ========== -->
+  <div id="tab-personas" class="panel">
+
+    <div class="card">
+      <div class="card-title">
+        <i class="ti ti-masks-theater"></i> My personas
+        <button class="btn btn-primary btn-sm" style="margin-left:auto;" onclick="openPersonaModal()">
+          <i class="ti ti-plus"></i> New persona
+        </button>
+      </div>
+      <div id="persona-list">
+        <div class="empty-state">
+          <i class="ti ti-masks-theater"></i>
+          No personas yet. Create your first one — give them a name, backstory, and writing style.
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- PERSONA MODAL -->
+  <div id="persona-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:100; overflow-y:auto; padding:2rem 1rem;">
+    <div style="max-width:580px; margin:0 auto; background:var(--bg); border-radius:var(--radius-lg); padding:1.5rem;">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1.25rem;">
+        <h3 style="font-size:16px; font-weight:600;" id="modal-title">New persona</h3>
+        <button class="btn btn-sm" onclick="closePersonaModal()"><i class="ti ti-x"></i></button>
+      </div>
+
+      <input type="hidden" id="persona-id" />
+
+      <div class="field">
+        <label>Name <span style="color:var(--danger-text);">*</span></label>
+        <input type="text" id="p-name" placeholder="e.g. Mike" />
+      </div>
+
+      <div style="display:flex; gap:12px;">
+        <div class="field" style="flex:1;">
+          <label>Age</label>
+          <input type="text" id="p-age" placeholder="e.g. 48" />
+        </div>
+        <div class="field" style="flex:1;">
+          <label>Location</label>
+          <input type="text" id="p-location" placeholder="e.g. Ohio" />
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Occupation</label>
+        <input type="text" id="p-job" placeholder="e.g. Construction worker" />
+      </div>
+
+      <div class="field">
+        <label>Debt backstory <span style="color:var(--danger-text);">*</span></label>
+        <textarea id="p-backstory" rows="3" placeholder="e.g. Got into $31k of credit card debt after a divorce and child support payments. Took 3 years to get out through debt settlement. Knows what it feels like to be drowning."></textarea>
+      </div>
+
+      <div class="field">
+        <label>Writing style <span style="color:var(--danger-text);">*</span></label>
+        <textarea id="p-style" rows="3" placeholder="e.g. Short sentences. Casual, no punctuation sometimes. Uses 'man' occasionally. Gets to the point fast. Never uses fancy words. Typos sometimes. Sounds like a text message not an essay."></textarea>
+      </div>
+
+      <div class="field">
+        <label>Default tone</label>
+        <select id="p-tone">
+          <option value="empathetic">Empathetic &amp; warm</option>
+          <option value="practical">Practical &amp; direct</option>
+          <option value="hopeful">Hopeful &amp; encouraging</option>
+          <option value="tough">Tough love</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label>Things this persona NEVER says or does</label>
+        <textarea id="p-never" rows="2" placeholder="e.g. Never mentions specific companies. Never sounds like an ad. Never uses words like 'delve', 'journey', 'empower'. Never writes long paragraphs."></textarea>
+      </div>
+
+      <div class="field">
+        <label>Extra context (hobbies, personality, other details)</label>
+        <textarea id="p-extra" rows="2" placeholder="e.g. Loves fishing and construction. Divorced, pays child support. Bit cynical but genuinely wants to help people. Sometimes mentions fishing as a stress relief."></textarea>
+      </div>
+
+      <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:1rem;">
+        <button class="btn" onclick="closePersonaModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="savePersona()"><i class="ti ti-device-floppy"></i> Save persona</button>
       </div>
     </div>
   </div>
@@ -654,7 +754,7 @@ const SAMPLE_POSTS = [
 /* ============================================================
    APP STATE
 ============================================================ */
-let leads = JSON.parse(localStorage.getItem('lgm_leads') || '[]');
+let personas = JSON.parse(localStorage.getItem('lgm_personas') || '[]');
 let keywords = [...CONFIG.KEYWORDS];
 let currentPost = null;
 
@@ -672,6 +772,8 @@ function init() {
   renderKeywords();
   renderSubreddits();
   renderLeads();
+  renderPersonaList();
+  renderPersonaSelect();
   updateStats();
 }
 
@@ -716,10 +818,11 @@ function updateApiStatus() {
    TABS
 ============================================================ */
 function switchTab(name) {
-  const names = ['monitor','compose','leads','settings'];
+  const names = ['monitor','compose','personas','leads','settings'];
   document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', names[i] === name));
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   document.getElementById('tab-' + name).classList.add('active');
+  if (name === 'compose') renderPersonaSelect();
 }
 
 /* ============================================================
@@ -776,7 +879,7 @@ async function scanPosts() {
   </div>`;
 
   try {
-    const res = await fetch('https://lead-gen-monitor.vercel.app/api/reddit?subreddit=personalfinance', {
+    const res = await fetch('https://www.reddit.com/r/personalfinance/new.json?limit=50', {
       headers: { 'Accept': 'application/json' }
     });
 
@@ -883,24 +986,43 @@ async function generateReply() {
     return;
   }
 
-  const tone = document.getElementById('tone-select').value;
+  const toneOverride = document.getElementById('tone-select').value;
+  const personaIdx = document.getElementById('persona-select').value;
+  const persona = personaIdx !== '' ? personas[parseInt(personaIdx)] : null;
   const chatUrl = getChatUrl();
-  const toneDesc = { empathetic: 'warm and empathetic', practical: 'practical and direct', hopeful: 'hopeful and encouraging' }[tone];
+
+  const effectiveTone = toneOverride !== 'auto' ? toneOverride : (persona ? persona.tone : 'empathetic');
+  const toneDesc = { empathetic: 'warm and empathetic', practical: 'practical and direct', hopeful: 'hopeful and encouraging', tough: 'tough love — direct and no-nonsense but still caring' }[effectiveTone] || 'warm and empathetic';
+
+  let personaBlock = '';
+  if (persona) {
+    personaBlock = `
+You are writing as: ${persona.name}${persona.age ? ', ' + persona.age : ''}${persona.location ? ' from ' + persona.location : ''}${persona.job ? ', ' + persona.job : ''}.
+
+Backstory: ${persona.backstory}
+
+Writing style: ${persona.style}
+
+${persona.never ? 'NEVER do these things: ' + persona.never : ''}
+
+${persona.extra ? 'Additional context: ' + persona.extra : ''}
+`;
+  }
 
   document.getElementById('reply-output').style.display = 'none';
   document.getElementById('compose-loading').style.display = 'block';
 
-  const prompt = `You help someone respond to a Reddit or Facebook post from a person struggling with debt. Write a genuine, helpful reply that builds trust and naturally mentions a free consultation via live chat.
+  const prompt = `${personaBlock}
+Write a genuine Reddit reply to someone struggling with debt. You are a real person who has been through debt problems yourself, not a marketer or company rep.
 
 Rules:
-- Sound like a real human who has been through financial difficulty, not a marketer
+- Write EXACTLY like the persona described above — match their voice, vocabulary, sentence length
 - Be ${toneDesc} in tone
-- Give 1-2 genuinely useful pieces of validation or practical framing first
-- Only mention the live chat at the very end, softly and naturally (e.g. "there are also free consultations available if you want someone to look at your specific numbers")
-- Never be salesy or pushy
+- Give 1-2 genuine, useful observations or validation first
+- ${chatUrl && chatUrl !== 'https://yourcompany.com/live-chat' ? 'Only at the very end, very softly mention there are free consultations available: ' + chatUrl : 'Do NOT mention any service or link — just be helpful'}
+- Never sound like an ad
 - Keep it under 120 words
-- No corporate jargon
-- Live chat link: ${chatUrl}
+- No corporate jargon, no "I hope this helps", no "best of luck on your journey"
 
 Post to reply to:
 "${postText}"
@@ -1022,6 +1144,120 @@ function renderSubreddits() {
       <div class="toggle on" onclick="this.classList.toggle('on')"></div>
     </div>
   `).join('');
+}
+
+/* ============================================================
+   PERSONAS
+============================================================ */
+function renderPersonaList() {
+  const el = document.getElementById('persona-list');
+  if (!personas.length) {
+    el.innerHTML = '<div class="empty-state"><i class="ti ti-masks-theater"></i>No personas yet. Create your first one.</div>';
+    return;
+  }
+  el.innerHTML = personas.map((p, i) => `
+    <div class="lead-item">
+      <div class="lead-avatar" style="background:var(--success-bg); color:var(--success-text);">${p.name.slice(0,2).toUpperCase()}</div>
+      <div style="flex:1;">
+        <div class="lead-name">${p.name}${p.age ? ', ' + p.age : ''}${p.location ? ' · ' + p.location : ''}</div>
+        <div class="lead-detail">${p.job || ''} · Tone: ${p.tone}</div>
+        <div style="font-size:12px; color:var(--text-tertiary); margin-top:2px;">${p.backstory.slice(0,80)}...</div>
+      </div>
+      <div style="display:flex; gap:6px; flex-shrink:0;">
+        <button class="btn btn-sm" onclick="editPersona(${i})"><i class="ti ti-pencil"></i></button>
+        <button class="btn btn-sm" onclick="deletePersona(${i})" style="color:var(--danger-text);"><i class="ti ti-trash"></i></button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderPersonaSelect() {
+  const sel = document.getElementById('persona-select');
+  if (!sel) return;
+  const current = sel.value;
+  sel.innerHTML = '<option value="">— No persona (generic) —</option>' +
+    personas.map((p, i) => `<option value="${i}">${p.name}${p.age ? ', ' + p.age : ''}</option>`).join('');
+  sel.value = current;
+  sel.onchange = updatePersonaPreview;
+  updatePersonaPreview();
+}
+
+function updatePersonaPreview() {
+  const sel = document.getElementById('persona-select');
+  const preview = document.getElementById('persona-preview');
+  if (!sel || !preview) return;
+  const idx = sel.value;
+  if (idx === '') { preview.style.display = 'none'; return; }
+  const p = personas[parseInt(idx)];
+  if (!p) { preview.style.display = 'none'; return; }
+  preview.style.display = 'block';
+  preview.innerHTML = `<strong>${p.name}</strong>${p.age ? ', ' + p.age : ''}${p.location ? ' from ' + p.location : ''}${p.job ? ' · ' + p.job : ''}<br><span style="color:var(--text-tertiary);">${p.backstory.slice(0, 120)}...</span>`;
+}
+
+function openPersonaModal(editIdx) {
+  document.getElementById('persona-modal').style.display = 'block';
+  document.getElementById('modal-title').textContent = editIdx !== undefined ? 'Edit persona' : 'New persona';
+  document.getElementById('persona-id').value = editIdx !== undefined ? editIdx : '';
+  if (editIdx !== undefined) {
+    const p = personas[editIdx];
+    document.getElementById('p-name').value = p.name || '';
+    document.getElementById('p-age').value = p.age || '';
+    document.getElementById('p-location').value = p.location || '';
+    document.getElementById('p-job').value = p.job || '';
+    document.getElementById('p-backstory').value = p.backstory || '';
+    document.getElementById('p-style').value = p.style || '';
+    document.getElementById('p-tone').value = p.tone || 'empathetic';
+    document.getElementById('p-never').value = p.never || '';
+    document.getElementById('p-extra').value = p.extra || '';
+  } else {
+    ['p-name','p-age','p-location','p-job','p-backstory','p-style','p-never','p-extra'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('p-tone').value = 'empathetic';
+  }
+}
+
+function closePersonaModal() {
+  document.getElementById('persona-modal').style.display = 'none';
+}
+
+function editPersona(i) { openPersonaModal(i); }
+
+function deletePersona(i) {
+  if (!confirm('Delete this persona?')) return;
+  personas.splice(i, 1);
+  localStorage.setItem('lgm_personas', JSON.stringify(personas));
+  renderPersonaList();
+  renderPersonaSelect();
+}
+
+function savePersona() {
+  const name = document.getElementById('p-name').value.trim();
+  const backstory = document.getElementById('p-backstory').value.trim();
+  const style = document.getElementById('p-style').value.trim();
+  if (!name || !backstory || !style) { alert('Name, backstory and writing style are required.'); return; }
+
+  const persona = {
+    name,
+    age: document.getElementById('p-age').value.trim(),
+    location: document.getElementById('p-location').value.trim(),
+    job: document.getElementById('p-job').value.trim(),
+    backstory,
+    style,
+    tone: document.getElementById('p-tone').value,
+    never: document.getElementById('p-never').value.trim(),
+    extra: document.getElementById('p-extra').value.trim()
+  };
+
+  const editIdx = document.getElementById('persona-id').value;
+  if (editIdx !== '') {
+    personas[parseInt(editIdx)] = persona;
+  } else {
+    personas.push(persona);
+  }
+
+  localStorage.setItem('lgm_personas', JSON.stringify(personas));
+  closePersonaModal();
+  renderPersonaList();
+  renderPersonaSelect();
 }
 
 /* ============================================================
