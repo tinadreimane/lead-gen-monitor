@@ -493,6 +493,7 @@
     <button class="tab" onclick="switchTab('compose')"><i class="ti ti-pencil"></i> Compose</button>
     <button class="tab" onclick="switchTab('personas')"><i class="ti ti-masks-theater"></i> Personas</button>
     <button class="tab" onclick="switchTab('leads')"><i class="ti ti-users"></i> Leads</button>
+    <button class="tab" onclick="switchTab('clicks')"><i class="ti ti-mouse"></i> Clicks</button>
     <button class="tab" onclick="switchTab('settings')"><i class="ti ti-settings"></i> Settings</button>
   </div>
 
@@ -654,6 +655,21 @@ Reply only. Nothing else."></textarea>
   </div>
 
   <!-- ========== SETTINGS PANEL ========== -->
+  <!-- ========== CLICKS PANEL ========== -->
+  <div id="tab-clicks" class="panel">
+    <div class="card">
+      <div class="card-title">
+        <i class="ti ti-mouse"></i> Link clicks
+        <button class="btn btn-sm" style="margin-left:auto;" onclick="loadClicks()"><i class="ti ti-refresh"></i> Refresh</button>
+      </div>
+      <div id="clicks-stats" style="display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:1rem;"></div>
+      <div id="clicks-list">
+        <div class="empty-state"><i class="ti ti-mouse"></i>Hit Refresh to load click data</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== SETTINGS PANEL ========== -->
   <div id="tab-settings" class="panel">
 
     <div class="card">
@@ -795,11 +811,12 @@ function updateApiStatus() {
    TABS
 ============================================================ */
 function switchTab(name) {
-  const names = ['monitor','compose','personas','leads','settings'];
+  const names = ['monitor','compose','personas','leads','clicks','settings'];
   document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', names[i] === name));
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   document.getElementById('tab-' + name).classList.add('active');
   if (name === 'compose') renderPersonaSelect();
+  if (name === 'clicks') loadClicks();
 }
 
 /* ============================================================
@@ -1033,9 +1050,7 @@ Write only the reply. Nothing else.`;
     const data = await res.json();
     if (data.error) throw new Error(data.error.message);
     const reply = data.content.map(b => b.text || '').join('').trim();
-    const cleanReply = reply
-  document.getElementById('reply-text').value = reply;
-document.getElementById('reply-text').value = cleanReply;
+    document.getElementById('reply-text').value = reply;
     document.getElementById('reply-output').style.display = 'block';
   } catch(e) {
     document.getElementById('reply-text').value = 'Error: ' + e.message;
@@ -1230,6 +1245,53 @@ function savePersona() {
   closePersonaModal();
   renderPersonaList();
   renderPersonaSelect();
+}
+
+/* ============================================================
+   CLICKS
+============================================================ */
+async function loadClicks() {
+  const list = document.getElementById('clicks-list');
+  const statsEl = document.getElementById('clicks-stats');
+  list.innerHTML = '<div style="padding:1rem; font-size:14px; color:var(--text-secondary);"><div class="loading-dots"><span></span><span></span><span></span></div> &nbsp;Loading clicks...</div>';
+
+  try {
+    const res = await fetch('https://lead-gen-monitor.vercel.app/api/clicks');
+    const raw = await res.json();
+
+    const clicks = raw.map(c => typeof c === 'string' ? JSON.parse(c) : c);
+
+    if (!clicks.length) {
+      list.innerHTML = '<div class="empty-state"><i class="ti ti-mouse"></i>No clicks yet — share some replies and check back!</div>';
+      statsEl.innerHTML = '';
+      return;
+    }
+
+    // stats
+    const countries = {};
+    clicks.forEach(c => { countries[c.country] = (countries[c.country] || 0) + 1; });
+    const topCountry = Object.entries(countries).sort((a,b) => b[1]-a[1])[0];
+    const today = clicks.filter(c => c.timestamp.slice(0,10) === new Date().toISOString().slice(0,10)).length;
+
+    statsEl.innerHTML = `
+      <div class="stat"><div class="stat-label">Total clicks</div><div class="stat-value">${clicks.length}</div></div>
+      <div class="stat"><div class="stat-label">Today</div><div class="stat-value">${today}</div></div>
+      <div class="stat"><div class="stat-label">Top country</div><div class="stat-value" style="font-size:16px;">${topCountry ? topCountry[0] + ' ('+topCountry[1]+')' : '—'}</div></div>
+    `;
+
+    list.innerHTML = clicks.map(c => `
+      <div class="lead-item">
+        <div class="lead-avatar" style="background:var(--info-bg); color:var(--info-text); font-size:11px;">${c.country}</div>
+        <div style="flex:1;">
+          <div class="lead-name">${c.city !== 'Unknown' ? c.city + ', ' + c.country : c.country}</div>
+          <div class="lead-detail">${c.referrer !== 'Direct' ? c.referrer : 'Direct'} · ${new Date(c.timestamp).toLocaleString()}</div>
+        </div>
+      </div>
+    `).join('');
+
+  } catch(e) {
+    list.innerHTML = '<div class="empty-state"><i class="ti ti-wifi-off"></i>Could not load clicks — ' + e.message + '</div>';
+  }
 }
 
 /* ============================================================
