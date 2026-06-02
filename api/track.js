@@ -1,14 +1,21 @@
-const clicks = [];
+import { Redis } from '@upstash/redis';
 
-export default function handler(req, res) {
-  const timestamp = new Date().toISOString();
-  const country = req.headers['x-vercel-ip-country'] || 'Unknown';
-  const city = req.headers['x-vercel-ip-city'] || '';
-  const referrer = req.headers['referer'] || 'Direct';
+const redis = Redis.fromEnv();
 
-  clicks.unshift({ timestamp, country, city, referrer });
+export default async function handler(req, res) {
+  try {
+    const click = {
+      timestamp: new Date().toISOString(),
+      country: req.headers['x-vercel-ip-country'] || 'Unknown',
+      city: req.headers['x-vercel-ip-city'] || 'Unknown',
+      referrer: req.headers['referer'] || 'Direct'
+    };
 
-  // Redirect to TurboDebt
+    await redis.lpush('clicks', JSON.stringify(click));
+  } catch(e) {
+    console.error('Track error:', e);
+  }
+
   res.setHeader('Location', 'https://www.turbodebt.com');
   res.status(302).end();
 }
