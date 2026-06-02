@@ -1033,7 +1033,10 @@ Write only the reply. Nothing else.`;
     const data = await res.json();
     if (data.error) throw new Error(data.error.message);
     const reply = data.content.map(b => b.text || '').join('').trim();
-    document.getElementById('reply-text').value = reply;
+    const cleanReply = reply
+  .replace(/https?:\/\/bit\.ly\/3RM5oua/g, '[turbodebt.com](https://bit.ly/3RM5oua)')
+  .replace(/turbodebt\.com(?!\))/g, '[turbodebt.com](https://bit.ly/3RM5oua)');
+document.getElementById('reply-text').value = cleanReply;
     document.getElementById('reply-output').style.display = 'block';
   } catch(e) {
     document.getElementById('reply-text').value = 'Error: ' + e.message;
